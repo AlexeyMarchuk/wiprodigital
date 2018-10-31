@@ -1,3 +1,4 @@
+import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -7,86 +8,103 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.net.URLConnection;
 import java.util.HashSet;
 
 public class Crawler {
     private static final String WD_URL = "http://wiprodigital.com";
     private static final String DOMAIN_NAME = "wiprodigital";
-    private static final String GOOGLE = "http://www.google.com";
+    private static final String GOOGLE = "google";
+    private static final String TWITTER = "twitter";
     private static final String OUTPUT_FILE = "out.txt";
+
     private HashSet<String> listUrlFromParent = new HashSet<>();
-    private HashSet<String> hsFinal;
-    private HashSet<String> uniqueUrl = new HashSet<>();
+    private HashSet<String> finalUrls = new HashSet<>();
+    private HashSet<String> iterationSet;
+
     private int uniqueUrlSize = 0;
 
 
     protected void run() {
         createFirstListOfUrl();
         createListOfAllUrls();
-        importToFile(uniqueUrl);
+        importToFile(finalUrls);
     }
 
     private void createFirstListOfUrl() {
-        makeSearch(WD_URL);
+        parsePage(WD_URL);
     }
 
     private void createListOfAllUrls() {
-        hsFinal = new HashSet<>(listUrlFromParent);
-        uniqueUrl.addAll(listUrlFromParent);
+        iterationSet = new HashSet<>(listUrlFromParent);
+        finalUrls.addAll(listUrlFromParent);
 
         while (!isFoundAllElements()) {
-            for (String str : hsFinal) {
-                makeSearch(str);
+            for (String str : iterationSet) {
+                if(isWDUrl(str)){
+                    parsePage(str);
+                }
             }
-            hsFinal = listUrlFromParent;
+            iterationSet = listUrlFromParent;
             listUrlFromParent.clear();
         }
     }
 
     private boolean isFoundAllElements() {
-        if (uniqueUrl.size() == uniqueUrlSize) {
+        if (finalUrls.size() == uniqueUrlSize) {
             return true;
         } else {
-            uniqueUrlSize = uniqueUrl.size();
+            uniqueUrlSize = finalUrls.size();
             return false;
         }
     }
 
-    private void makeSearch(String wdUrl) {
-        if (isOnLine()) {
-            parsePage(wdUrl);
-        } else {
-            System.out.println("You are in Off-line mode");
-        }
+    private boolean isWDUrl(String url){
+        return url.startsWith("http://" + DOMAIN_NAME) || url.startsWith("https://" + DOMAIN_NAME);
     }
-
 
     private void parsePage(String wdUrl) {
         try {
+
             Document doc = Jsoup.connect(wdUrl).get();
-            Elements newsHeadlines = doc.select("a[href]");
-            checkUrlOneByOne(newsHeadlines);
+            checkUrlOneByOne(doc);
+            checkOnImage(doc);
+
+        } catch (HttpStatusException e) {
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private void checkUrlOneByOne(Elements newsHeadlines) {
-        int count = 0;
+    private void checkUrlOneByOne(Document doc) {
+        Elements newsHeadlines = doc.select("a[href]");
         for (Element headline : newsHeadlines) {
-            ++count;
-            if (idRequiredElement(headline) && !uniqueUrl.contains(headline.absUrl("href"))) {
+            if (idRequiredElement(headline) && !finalUrls.contains(headline.absUrl("href"))) {
                 String url = headline.absUrl("href");
                 listUrlFromParent.add(url);
-                uniqueUrl.add(url);
+                finalUrls.add(url);
             }
         }
     }
 
+    private void checkOnImage(Document doc) {
+        Elements imageElements = doc.select("img[src]");
+        for (Element url : imageElements) {
+            String imgSrc = url.attr("abs:src");
+            finalUrls.add(imgSrc);
+        }
+    }
+
     private boolean idRequiredElement(Element headline) {
-        String s = convertUrl(headline);
-        return s.contains(DOMAIN_NAME) && !headline.absUrl("href").contains("#");
+        if (isHttpOrHttps(headline.absUrl("href"))) {
+            String s = convertUrl(headline);
+            return !s.contains(GOOGLE) && !s.contains(TWITTER) && !headline.absUrl("href").contains("#");
+        } else {
+            return false;
+        }
+    }
+
+    private boolean isHttpOrHttps(String s) {
+        return s.startsWith("http") || s.startsWith("https");
     }
 
     private String convertUrl(Element headline) {
@@ -95,20 +113,6 @@ public class Crawler {
         } catch (MalformedURLException e) {
             e.printStackTrace();
             return "";
-        }
-    }
-
-    private static boolean isOnLine() {
-        try {
-            final URL url = new URL(GOOGLE);
-            final URLConnection conn = url.openConnection();
-            conn.connect();
-            conn.getInputStream().close();
-            return true;
-        } catch (MalformedURLException e) {
-            throw new RuntimeException(e);
-        } catch (IOException e) {
-            return false;
         }
     }
 
