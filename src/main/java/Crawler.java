@@ -1,36 +1,41 @@
+import org.json.JSONObject;
 import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
+import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.HashSet;
 
 public class Crawler {
     private static final String WD_URL = "http://wiprodigital.com";
-    private static final String DOMAIN_NAME = "wiprodigital";
-    private static final String GOOGLE = "google";
-    private static final String TWITTER = "twitter";
-    private static final String OUTPUT_FILE = "out.txt";
+    private static final String HTTP_DOMAIN_NAME = "http://wiprodigital";
+    private static final String HTTPS_DOMAIN_NAME = "https://wiprodigital";
+    private static final String OUTPUT_TXT = "out.txt";
+    private static final String OUTPUT_JSON = "out.json";
 
     private HashSet<String> listUrlFromParent = new HashSet<>();
     private HashSet<String> finalUrls = new HashSet<>();
     private HashSet<String> iterationSet;
 
-    private int uniqueUrlSize = 0;
+    private JsonConverter json = new JsonConverter();
 
+    private int uniqueUrlSize = 0;
 
     protected void run() {
         createFirstListOfUrl();
         createListOfAllUrls();
         importToFile(finalUrls);
+        importToFile(json.getJson());
     }
 
     private void createFirstListOfUrl() {
+        json.setMainUrl(WD_URL);
         parsePage(WD_URL);
     }
 
@@ -40,10 +45,13 @@ public class Crawler {
 
         while (!isFoundAllElements()) {
             for (String str : iterationSet) {
-                if(isWDUrl(str)){
+                json.setMainUrl(str);
+                if (isWDUrl(str)) {
                     parsePage(str);
                 }
+                json.addRecord();
             }
+
             iterationSet = listUrlFromParent;
             listUrlFromParent.clear();
         }
@@ -58,8 +66,8 @@ public class Crawler {
         }
     }
 
-    private boolean isWDUrl(String url){
-        return url.startsWith("http://" + DOMAIN_NAME) || url.startsWith("https://" + DOMAIN_NAME);
+    private boolean isWDUrl(String url) {
+        return url.startsWith(HTTP_DOMAIN_NAME) || url.startsWith(HTTPS_DOMAIN_NAME);
     }
 
     private void parsePage(String wdUrl) {
@@ -76,12 +84,15 @@ public class Crawler {
     }
 
     private void checkUrlOneByOne(Document doc) {
-        Elements newsHeadlines = doc.select("a[href]");
-        for (Element headline : newsHeadlines) {
-            if (idRequiredElement(headline) && !finalUrls.contains(headline.absUrl("href"))) {
-                String url = headline.absUrl("href");
-                listUrlFromParent.add(url);
-                finalUrls.add(url);
+        Elements urlString = doc.select("a[href]");
+        for (Element url : urlString) {
+            String fullUrl = url.absUrl("href");
+            if (isWDUrl(url.absUrl("href"))) {
+                json.addInternal(fullUrl);
+                listUrlFromParent.add(fullUrl);
+                finalUrls.add(fullUrl);
+            } else {
+                json.addExternal(fullUrl);
             }
         }
     }
@@ -90,39 +101,28 @@ public class Crawler {
         Elements imageElements = doc.select("img[src]");
         for (Element url : imageElements) {
             String imgSrc = url.attr("abs:src");
+            json.addImg(imgSrc);
             finalUrls.add(imgSrc);
-        }
-    }
-
-    private boolean idRequiredElement(Element headline) {
-        if (isHttpOrHttps(headline.absUrl("href"))) {
-            String s = convertUrl(headline);
-            return !s.contains(GOOGLE) && !s.contains(TWITTER) && !headline.absUrl("href").contains("#");
-        } else {
-            return false;
-        }
-    }
-
-    private boolean isHttpOrHttps(String s) {
-        return s.startsWith("http") || s.startsWith("https");
-    }
-
-    private String convertUrl(Element headline) {
-        try {
-            return new URL(headline.absUrl("href")).getHost();
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
-            return "";
         }
     }
 
     private void importToFile(HashSet<String> urls) {
         try {
-            FileWriter fw = new FileWriter(OUTPUT_FILE);
+            FileWriter fw = new FileWriter(OUTPUT_TXT);
             for (String s : urls) {
                 fw.write(s + "\n");
             }
             fw.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void importToFile(JSONObject json) {
+        try {
+            BufferedWriter writer = Files.newBufferedWriter(Paths.get(OUTPUT_JSON));
+            json.write(writer);
+            writer.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
