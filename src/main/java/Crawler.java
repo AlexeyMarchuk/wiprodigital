@@ -52,7 +52,7 @@ public class Crawler {
                 json.addRecord();
             }
 
-            iterationSet = listUrlFromParent;
+            iterationSet = new HashSet<>(listUrlFromParent);
             listUrlFromParent.clear();
         }
     }

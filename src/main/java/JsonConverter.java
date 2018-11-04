@@ -2,17 +2,17 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 
 public class JsonConverter {
 
     private Map<String, HashMap<String, ArrayList<String>>> wholeJSONMap = new HashMap<>();
     private HashMap<String, ArrayList<String>> internalMap = new HashMap<>();
-    private ArrayList<String> internal = new ArrayList<>();
-    private ArrayList<String> external = new ArrayList<>();
-    private ArrayList<String> img = new ArrayList<>();
+    private HashSet<String> internal = new HashSet<>();
+    private HashSet<String> external = new HashSet<>();
+    private HashSet<String> img = new HashSet<>();
     private String mainUrl;
-    private JSONObject finalBlock = new JSONObject();
 
     private final static String INTERNAL = "Internal URLs";
     private final static String EXTERNAL = "External URLs";
